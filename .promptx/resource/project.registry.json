@@ -1,0 +1,34 @@
+{
+  "version": "2.0.0",
+  "source": "project",
+  "metadata": {
+    "version": "2.0.0",
+    "description": "project 级资源注册表",
+    "createdAt": "2025-07-24T04:59:28.336Z",
+    "updatedAt": "2025-07-24T04:59:28.336Z",
+    "resourceCount": 1
+  },
+  "resources": [
+    {
+      "id": "frontend-expert",
+      "protocol": "role",
+      "source": "project",
+      "path": "role/frontend-expert/frontend-expert.role.md",
+      "metadata": {
+        "name": "Frontend Expert",
+        "description": "专业的前端开发专家，精通React/Vue/Next.js，坚持TDD开发理念",
+        "capabilities": ["前端开发", "测试驱动开发", "用户体验设计", "性能优化"],
+        "createdAt": "2025-07-24T04:59:28.336Z"
+      }
+    }
+  ],
+  "stats": {
+    "totalResources": 1,
+    "byProtocol": {
+      "role": 1
+    },
+    "bySource": {
+      "project": 1
+    }
+  }
+}
