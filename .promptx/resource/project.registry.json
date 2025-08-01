@@ -4,31 +4,48 @@
   "metadata": {
     "version": "2.0.0",
     "description": "project 级资源注册表",
-    "createdAt": "2025-07-24T04:59:28.336Z",
-    "updatedAt": "2025-07-24T04:59:28.336Z",
-    "resourceCount": 1
+    "createdAt": "2025-08-01T02:12:53.663Z",
+    "updatedAt": "2025-08-01T02:12:53.666Z",
+    "resourceCount": 2
   },
   "resources": [
     {
-      "id": "frontend-expert",
-      "protocol": "role",
+      "id": "frontend-development-workflow",
       "source": "project",
-      "path": "role/frontend-expert/frontend-expert.role.md",
+      "protocol": "execution",
+      "name": "Frontend Development Workflow 执行模式",
+      "description": "执行模式，定义具体的行为模式",
+      "reference": "@project://.promptx/resource/role/frontend-expert/execution/frontend-development-workflow.execution.md",
       "metadata": {
-        "name": "Frontend Expert",
-        "description": "专业的前端开发专家，精通React/Vue/Next.js，坚持TDD开发理念",
-        "capabilities": ["前端开发", "测试驱动开发", "用户体验设计", "性能优化"],
-        "createdAt": "2025-07-24T04:59:28.336Z"
+        "createdAt": "2025-08-01T02:12:53.665Z",
+        "updatedAt": "2025-08-01T02:12:53.665Z",
+        "scannedAt": "2025-08-01T02:12:53.665Z",
+        "path": "role/frontend-expert/execution/frontend-development-workflow.execution.md"
+      }
+    },
+    {
+      "id": "frontend-expert",
+      "source": "project",
+      "protocol": "role",
+      "name": "Frontend Expert 角色",
+      "description": "专业角色，提供特定领域的专业能力",
+      "reference": "@project://.promptx/resource/role/frontend-expert/frontend-expert.role.md",
+      "metadata": {
+        "createdAt": "2025-08-01T02:12:53.666Z",
+        "updatedAt": "2025-08-01T02:12:53.666Z",
+        "scannedAt": "2025-08-01T02:12:53.666Z",
+        "path": "role/frontend-expert/frontend-expert.role.md"
       }
     }
   ],
   "stats": {
-    "totalResources": 1,
+    "totalResources": 2,
     "byProtocol": {
+      "execution": 1,
       "role": 1
     },
     "bySource": {
-      "project": 1
+      "project": 2
     }
   }
 }

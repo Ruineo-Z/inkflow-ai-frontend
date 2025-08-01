@@ -1,308 +1,203 @@
-import { useState, useEffect } from 'react'
-import { useAuthStore } from '../store/authStore'
-import { StoryReader } from './StoryReader'
-import { storiesAPI } from '../services/api'
+import React, { useEffect } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
+import { useAuth } from '../hooks/useAuth';
+import { useStories } from '../hooks/useStories';
+import { Button, Card, CardBody, CardTitle, CardText, Spinner } from '../components/ui';
+import { formatDate, formatNumber } from '../utils';
 
-/**
- * 主仪表板页面
- */
-export const Dashboard = () => {
-  const user = useAuthStore((state) => state.user)
-  const logout = useAuthStore((state) => state.logout)
-  const [stories, setStories] = useState([])
-  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false)
-  const [currentView, setCurrentView] = useState('dashboard') // 'dashboard' | 'reader'
-  const [selectedStoryId, setSelectedStoryId] = useState(null)
-  const [isLoading, setIsLoading] = useState(true)
-  const [error, setError] = useState('')
+const Dashboard = () => {
+  const { user, logout } = useAuth();
+  const { stories, loading, error, fetchStories } = useStories();
+  const navigate = useNavigate();
 
-  const handleLogout = () => {
-    logout()
-  }
-
-  /**
-   * 加载用户故事列表
-   */
-  const loadStories = async () => {
-    setIsLoading(true)
-    setError('')
-
-    try {
-      const response = await storiesAPI.getStories()
-      console.log('Load Stories Response:', response) // 调试日志
-      const stories = response.data?.stories || response.data || []
-      console.log('Stories:', stories) // 调试日志
-      setStories(stories)
-    } catch (err) {
-      console.error('Load stories error:', err)
-      setError(err.message || '加载故事列表失败')
-      setStories([]) // 确保stories始终是数组
-    } finally {
-      setIsLoading(false)
-    }
-  }
-
-  const handleCreateStory = () => {
-    setIsCreateModalOpen(true)
-  }
-
-  const handleCloseModal = () => {
-    setIsCreateModalOpen(false)
-  }
-
-  const handleSubmitStory = async (storyData) => {
-    try {
-      const response = await storiesAPI.createStory(storyData)
-      console.log('API Response:', response) // 调试日志
-      const newStory = response.data?.story || response.data
-      console.log('New Story:', newStory) // 调试日志
-      if (newStory) {
-        setStories(prev => [newStory, ...(prev || [])])
-      }
-      setIsCreateModalOpen(false)
-      alert('小说创建成功！')
-      // 重新加载故事列表以确保数据同步
-      loadStories()
-    } catch (error) {
-      console.error('Create story error:', error)
-      alert('创建失败：' + error.message)
-    }
-  }
-
-  const handleReadStory = (storyId) => {
-    setSelectedStoryId(storyId)
-    setCurrentView('reader')
-  }
-
-  const handleBackToDashboard = () => {
-    setCurrentView('dashboard')
-    setSelectedStoryId(null)
-  }
-
-  // 组件挂载时加载数据
   useEffect(() => {
-    loadStories()
-  }, [])
+    fetchStories();
+  }, [fetchStories]);
 
-  // 如果是阅读模式，显示阅读器
-  if (currentView === 'reader' && selectedStoryId) {
+  if (loading) {
     return (
-      <StoryReader
-        storyId={selectedStoryId}
-        onBack={handleBackToDashboard}
-      />
-    )
+      <div className="app-container">
+        <div className="max-w-4xl mx-auto px-4 py-8">
+          <div className="flex justify-center items-center min-h-64">
+            <Spinner size="lg" />
+            <p className="ml-4 text-gray-600">加载中...</p>
+          </div>
+        </div>
+      </div>
+    );
   }
 
   return (
-    <div style={{ minHeight: '100vh', backgroundColor: '#f9fafb', fontFamily: 'system-ui, sans-serif' }}>
-      {/* 头部导航 */}
-      <header style={{ backgroundColor: 'white', borderBottom: '1px solid #e5e7eb', boxShadow: '0 1px 2px 0 rgba(0, 0, 0, 0.05)' }}>
-        <div style={{ maxWidth: '80rem', margin: '0 auto', padding: '0 1rem' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', height: '4rem' }}>
-            <h1 style={{ fontSize: '1.25rem', fontWeight: '700', color: '#111827' }}>InkFlow AI</h1>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-              <span style={{ fontSize: '0.875rem', color: '#4b5563' }}>
-                欢迎，{user?.username || '用户'}
-              </span>
-              <button
-                onClick={handleLogout}
-                style={{
-                  fontSize: '0.875rem',
-                  color: '#4b5563',
-                  cursor: 'pointer',
-                  background: 'none',
-                  border: 'none'
-                }}
+    <div className="app-container">
+      <div className="max-w-4xl mx-auto px-4 py-6">
+        {/* 页面头部 */}
+        <div className="mb-6">
+          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+            <div>
+              <h1 className="text-2xl font-bold text-gray-900 mb-2">
+                欢迎回来，{user?.name || '用户'}！
+              </h1>
+              <p className="text-gray-600">开始创作你的互动故事</p>
+            </div>
+            <div className="flex flex-col sm:flex-row gap-2">
+              <Button
+                onClick={() => navigate('/create-story')}
+                className="btn-primary"
+              >
+                创建新故事
+              </Button>
+              <Button
+                onClick={logout}
+                className="bg-gray-500 hover:bg-gray-600 text-white px-4 py-2 rounded-md transition-colors"
               >
                 退出登录
-              </button>
+              </Button>
             </div>
           </div>
         </div>
-      </header>
 
-      {/* 主要内容 */}
-      <main style={{ maxWidth: '80rem', margin: '0 auto', padding: '2rem 1rem' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem' }}>
-          <div>
-            <h2 style={{ fontSize: '1.5rem', fontWeight: '700', color: '#111827' }}>我的小说</h2>
-            <p style={{ color: '#4b5563', marginTop: '0.25rem' }}>
-              {stories && stories.length > 0 ? `共 ${stories.length} 部小说` : '还没有创建小说'}
-            </p>
-          </div>
-
-          <button
-            onClick={handleCreateStory}
-            className="btn-primary"
-            style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}
-          >
-            <svg style={{ width: '1.25rem', height: '1.25rem' }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-            </svg>
-            <span>创建新小说</span>
-          </button>
-        </div>
-
-        {/* 错误提示 */}
-        {error && (
-          <div style={{ backgroundColor: '#fef2f2', border: '1px solid #fecaca', borderRadius: '0.5rem', padding: '1rem', marginBottom: '1.5rem' }}>
-            <p style={{ color: '#dc2626', fontSize: '0.875rem' }}>{error}</p>
-            <button
-              onClick={loadStories}
-              style={{ color: '#dc2626', fontSize: '0.875rem', textDecoration: 'underline', background: 'none', border: 'none', cursor: 'pointer', marginTop: '0.5rem' }}
-            >
-              重新加载
-            </button>
-          </div>
-        )}
-
-        {/* 加载状态 */}
-        {isLoading && (
-          <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', padding: '3rem 0' }}>
-            <div style={{ width: '2rem', height: '2rem', border: '2px solid #e5e7eb', borderTop: '2px solid #3b82f6', borderRadius: '50%', animation: 'spin 1s linear infinite' }}></div>
-            <span style={{ marginLeft: '0.5rem', color: '#6b7280' }}>加载中...</span>
-          </div>
-        )}
-
-        {/* 小说列表 */}
-        {!isLoading && !error && (
-          <>
-            {stories && stories.length > 0 ? (
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: '1.5rem' }}>
-            {stories.map(story => (
-              <div key={story.id} className="card" style={{ padding: '1.5rem' }}>
-                <h3 style={{ fontSize: '1.125rem', fontWeight: '600', color: '#111827', marginBottom: '0.5rem' }}>
-                  {story.title}
-                </h3>
-                <div style={{ fontSize: '0.875rem', color: '#4b5563', marginBottom: '1rem' }}>
-                  <p>风格：{story.style}</p>
-                  <p>章节：{story.current_chapter_number} 章</p>
-                  <p>状态：{story.status === 'active' ? '进行中' : story.status}</p>
-                </div>
-                <div style={{ display: 'flex', gap: '0.5rem' }}>
-                  <button
-                    className="btn-primary"
-                    style={{ flex: 1 }}
-                    onClick={() => handleReadStory(story.id)}
-                  >
-                    继续阅读
-                  </button>
-                  <button
-                    className="btn-secondary"
-                    onClick={() => {
-                      setStories(prev => prev.filter(s => s.id !== story.id))
-                    }}
-                  >
-                    删除
-                  </button>
-                </div>
+        {/* 统计数据 */}
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
+          <Card className="simple-card">
+            <CardBody className="p-4">
+              <div className="text-center">
+                <p className="text-gray-600 text-sm mb-1">总故事数</p>
+                <p className="text-gray-900 text-xl font-semibold">{stories.length}</p>
               </div>
-            ))}
-          </div>
-        ) : (
-          <div style={{ textAlign: 'center', padding: '3rem 0' }}>
-            <svg style={{ margin: '0 auto', height: '3rem', width: '3rem', color: '#9ca3af' }} fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.746 0 3.332.477 4.5 1.253v13C19.832 18.477 18.246 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
-            </svg>
-            <h3 style={{ marginTop: '0.5rem', fontSize: '0.875rem', fontWeight: '500', color: '#111827' }}>还没有小说</h3>
-            <p style={{ marginTop: '0.25rem', fontSize: '0.875rem', color: '#6b7280' }}>开始创建您的第一部AI交互式小说吧！</p>
-            <div style={{ marginTop: '1.5rem' }}>
-              <button onClick={handleCreateStory} className="btn-primary">
-                创建新小说
-              </button>
-            </div>
-          </div>
-            )}
-          </>
-        )}
-      </main>
+            </CardBody>
+          </Card>
 
-      {/* 创建小说模态框 */}
-      {isCreateModalOpen && (
-        <CreateNovelModal
-          onClose={handleCloseModal}
-          onSubmit={handleSubmitStory}
-        />
-      )}
-    </div>
-  )
-}
+          <Card className="simple-card">
+            <CardBody className="p-4">
+              <div className="text-center">
+                <p className="text-gray-600 text-sm mb-1">进行中</p>
+                <p className="text-gray-900 text-xl font-semibold">
+                  {stories.filter(story => story.status === 'draft').length}
+                </p>
+              </div>
+            </CardBody>
+          </Card>
 
-// 简单的创建小说模态框组件
-const CreateNovelModal = ({ onClose, onSubmit }) => {
-  const [formData, setFormData] = useState({
-    style: '修仙',
-    title: ''
-  })
-
-  const handleSubmit = (e) => {
-    e.preventDefault()
-    onSubmit(formData)
-  }
-
-  return (
-    <div style={{
-      position: 'fixed',
-      inset: 0,
-      backgroundColor: 'rgba(0, 0, 0, 0.5)',
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'center',
-      padding: '1rem',
-      zIndex: 50
-    }}>
-      <div className="card" style={{ width: '100%', maxWidth: '28rem' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
-          <h2 style={{ fontSize: '1.25rem', fontWeight: '700', color: '#111827' }}>创建新小说</h2>
-          <button
-            onClick={onClose}
-            style={{ background: 'none', border: 'none', fontSize: '1.5rem', cursor: 'pointer', color: '#6b7280' }}
-          >
-            ×
-          </button>
+          <Card className="simple-card">
+            <CardBody className="p-4">
+              <div className="text-center">
+                <p className="text-gray-600 text-sm mb-1">已完成</p>
+                <p className="text-gray-900 text-xl font-semibold">
+                  {stories.filter(story => story.status === 'published').length}
+                </p>
+              </div>
+            </CardBody>
+          </Card>
         </div>
 
-        <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-          <div>
-            <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: '500', color: '#374151', marginBottom: '0.25rem' }}>
-              小说风格
-            </label>
-            <select
-              value={formData.style}
-              onChange={(e) => setFormData(prev => ({ ...prev, style: e.target.value }))}
-              className="input-field"
+        {/* 快速操作 */}
+        <div className="mb-6">
+          <h2 className="text-xl font-semibold text-gray-900 mb-4">快速操作</h2>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <Button 
+              onClick={() => navigate('/create-story')}
+              className="btn-primary p-4 text-left"
             >
-              <option value="修仙">修仙</option>
-              <option value="武侠">武侠</option>
-              <option value="科技">科技</option>
-            </select>
+              <div>
+                <div className="font-semibold">创建新故事</div>
+                <div className="text-sm opacity-80">开始你的创作之旅</div>
+              </div>
+            </Button>
+            <Button 
+              onClick={() => navigate('/my-stories')}
+              className="bg-gray-100 hover:bg-gray-200 text-gray-900 p-4 text-left transition-colors"
+            >
+              <div>
+                <div className="font-semibold">我的故事</div>
+                <div className="text-sm opacity-80">查看所有作品</div>
+              </div>
+            </Button>
           </div>
+        </div>
 
-          <div>
-            <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: '500', color: '#374151', marginBottom: '0.25rem' }}>
-              小说标题 (可选)
-            </label>
-            <input
-              type="text"
-              value={formData.title}
-              onChange={(e) => setFormData(prev => ({ ...prev, title: e.target.value }))}
-              placeholder="留空将自动生成标题"
-              className="input-field"
-              maxLength={50}
-            />
+        {/* 最近的故事 */}
+        <div className="mb-6">
+          <div className="flex justify-between items-center mb-4">
+            <h2 className="text-xl font-semibold text-gray-900">最近的故事</h2>
+            <Link to="/my-stories" className="text-blue-600 hover:text-blue-800 text-sm">
+              查看全部 →
+            </Link>
           </div>
-
-          <div style={{ display: 'flex', gap: '0.75rem', paddingTop: '1rem' }}>
-            <button type="button" onClick={onClose} className="btn-secondary" style={{ flex: 1 }}>
-              取消
-            </button>
-            <button type="submit" className="btn-primary" style={{ flex: 1 }}>
-              创建小说
-            </button>
-          </div>
-        </form>
+          
+          {error && (
+            <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4">
+              加载故事失败：{error}
+            </div>
+          )}
+          
+          {stories.length > 0 ? (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              {stories.slice(0, 6).map((story) => (
+                <Card key={story.id} className="simple-card hover:shadow-md transition-shadow">
+                  <CardBody className="p-4">
+                    <div className="flex justify-between items-start mb-3">
+                      <CardTitle className="text-gray-900 font-semibold text-sm line-clamp-2 flex-1">
+                        {story.title}
+                      </CardTitle>
+                      <span className={`px-2 py-1 rounded text-xs ${
+                        story.status === 'published' 
+                          ? 'bg-green-100 text-green-800' 
+                          : 'bg-yellow-100 text-yellow-800'
+                      }`}>
+                        {story.status === 'published' ? '已发布' : '草稿'}
+                      </span>
+                    </div>
+                    
+                    <CardText className="text-gray-600 text-xs mb-3 line-clamp-2">
+                      {story.description}
+                    </CardText>
+                    
+                    <div className="flex justify-between items-center text-gray-500 text-xs mb-3">
+                      <span>{formatDate(story.updatedAt)}</span>
+                      <span>{formatNumber(story.viewCount || 0)} 阅读</span>
+                    </div>
+                    
+                    <div className="flex gap-2">
+                      <Button 
+                        size="sm" 
+                        onClick={() => navigate(`/story/${story.id}/edit`)}
+                        className="bg-gray-100 hover:bg-gray-200 text-gray-700 text-xs px-3 py-1 flex-1"
+                      >
+                        编辑
+                      </Button>
+                      <Button 
+                        size="sm"
+                        onClick={() => navigate(`/story/${story.id}`)}
+                        className="btn-primary text-xs px-3 py-1 flex-1"
+                      >
+                        查看
+                      </Button>
+                    </div>
+                  </CardBody>
+                </Card>
+              ))}
+            </div>
+          ) : (
+            <Card className="simple-card text-center py-8">
+              <CardBody>
+                <div className="text-4xl mb-3">📝</div>
+                <CardTitle className="text-gray-900 text-lg mb-2">还没有故事</CardTitle>
+                <CardText className="text-gray-600 mb-4">
+                  开始创作你的第一个互动故事吧！
+                </CardText>
+                <Button 
+                  onClick={() => navigate('/create-story')}
+                  className="btn-primary"
+                >
+                  创建故事
+                </Button>
+              </CardBody>
+            </Card>
+          )}
+        </div>
       </div>
     </div>
-  )
-}
+  );
+};
+
+export default Dashboard;

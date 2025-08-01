@@ -1,196 +1,516 @@
 /**
- * API服务模块
- * 提供与后端API的交互功能
+ * API 服务基础配置
+ * 包含axios实例配置、请求拦截器、响应拦截器等
  */
 
-const BASE_URL = 'http://localhost:20001/api'
-
-
+import axios from 'axios';
+import { API_CONFIG, STORAGE_KEYS, HTTP_STATUS, ERROR_MESSAGES } from '@constants';
 
 /**
- * 通用API请求函数
- * @param {string} endpoint - API端点
- * @param {Object} options - 请求选项
- * @returns {Promise<Object>} API响应数据
+ * 创建axios实例
  */
-const apiRequest = async (endpoint, options = {}) => {
-  const url = `${BASE_URL}${endpoint}`
-  const token = localStorage.getItem('token')
+const apiClient = axios.create({
+  baseURL: API_CONFIG.BASE_URL,
+  timeout: API_CONFIG.TIMEOUT,
+  headers: {
+    'Content-Type': 'application/json',
+  },
+});
 
-  const config = {
-    headers: {
-      'Content-Type': 'application/json',
-      ...(token && { Authorization: `Bearer ${token}` }),
-      ...options.headers,
-    },
-    ...options,
+/**
+ * 获取存储的认证token
+ */
+const getAuthToken = () => {
+  return localStorage.getItem(STORAGE_KEYS.AUTH_TOKEN);
+};
+
+/**
+ * 设置认证token
+ */
+const setAuthToken = (token) => {
+  if (token) {
+    localStorage.setItem(STORAGE_KEYS.AUTH_TOKEN, token);
+  } else {
+    localStorage.removeItem(STORAGE_KEYS.AUTH_TOKEN);
   }
+};
 
-  try {
-    const response = await fetch(url, config)
+/**
+ * 清除认证信息
+ */
+const clearAuth = () => {
+  localStorage.removeItem(STORAGE_KEYS.AUTH_TOKEN);
+  localStorage.removeItem(STORAGE_KEYS.USER_INFO);
+};
 
-    if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}))
-      throw new Error(errorData.message || `HTTP ${response.status}`)
+/**
+ * 请求拦截器 - 自动添加认证token
+ */
+apiClient.interceptors.request.use(
+  (config) => {
+    const token = getAuthToken();
+    if (token) {
+      config.headers.Authorization = `Bearer ${token}`;
     }
+    
+    // 开发环境下打印请求信息
+    if (import.meta.env.DEV && import.meta.env.VITE_ENABLE_DEBUG === 'true') {
+      console.log('🚀 API Request:', {
+        method: config.method?.toUpperCase(),
+        url: config.url,
+        baseURL: config.baseURL,
+        fullURL: `${config.baseURL}${config.url}`,
+        data: config.data,
+        headers: config.headers,
+      });
+    }
+    
+    return config;
+  },
+  (error) => {
+    console.error('❌ Request Error:', error);
+    return Promise.reject(error);
+  }
+);
 
-    return await response.json()
+/**
+ * 响应拦截器 - 统一处理响应和错误
+ */
+apiClient.interceptors.response.use(
+  (response) => {
+    // 开发环境下打印响应信息
+    if (import.meta.env.DEV && import.meta.env.VITE_ENABLE_DEBUG === 'true') {
+      console.log('✅ API Response:', {
+        status: response.status,
+        url: response.config.url,
+        data: response.data,
+      });
+    }
+    
+    return response;
+  },
+  (error) => {
+    console.error('❌ Response Error:', error);
+    
+    // 处理网络错误
+    if (!error.response) {
+      return Promise.reject({
+        message: ERROR_MESSAGES.NETWORK_ERROR,
+        type: 'NETWORK_ERROR',
+        originalError: error,
+      });
+    }
+    
+    const { status, data } = error.response;
+    
+    // 处理不同的HTTP状态码
+    switch (status) {
+      case HTTP_STATUS.UNAUTHORIZED:
+        // 401 - 未授权，清除本地认证信息并跳转到登录页
+        clearAuth();
+        if (window.location.pathname !== '/login') {
+          window.location.href = '/login';
+        }
+        return Promise.reject({
+          message: ERROR_MESSAGES.UNAUTHORIZED,
+          type: 'UNAUTHORIZED',
+          status,
+          data,
+        });
+        
+      case HTTP_STATUS.FORBIDDEN:
+        return Promise.reject({
+          message: ERROR_MESSAGES.FORBIDDEN,
+          type: 'FORBIDDEN',
+          status,
+          data,
+        });
+        
+      case HTTP_STATUS.NOT_FOUND:
+        return Promise.reject({
+          message: ERROR_MESSAGES.NOT_FOUND,
+          type: 'NOT_FOUND',
+          status,
+          data,
+        });
+        
+      case HTTP_STATUS.BAD_REQUEST:
+        return Promise.reject({
+          message: data?.message || ERROR_MESSAGES.VALIDATION_ERROR,
+          type: 'VALIDATION_ERROR',
+          status,
+          data,
+        });
+        
+      case HTTP_STATUS.INTERNAL_SERVER_ERROR:
+        return Promise.reject({
+          message: ERROR_MESSAGES.SERVER_ERROR,
+          type: 'SERVER_ERROR',
+          status,
+          data,
+        });
+        
+      default:
+        return Promise.reject({
+          message: data?.message || ERROR_MESSAGES.UNKNOWN_ERROR,
+          type: 'UNKNOWN_ERROR',
+          status,
+          data,
+        });
+    }
+  }
+);
+
+/**
+ * API错误处理工具函数
+ */
+export const handleAPIError = (error) => {
+  // 如果是我们自定义的错误格式
+  if (error.type && error.message) {
+    return {
+      success: false,
+      error: {
+        type: error.type,
+        message: error.message,
+        status: error.status,
+        data: error.data,
+      },
+    };
+  }
+  
+  // 处理其他类型的错误
+  return {
+    success: false,
+    error: {
+      type: 'UNKNOWN_ERROR',
+      message: error.message || ERROR_MESSAGES.UNKNOWN_ERROR,
+      originalError: error,
+    },
+  };
+};
+
+/**
+ * 通用API请求方法
+ */
+export const apiRequest = async (config) => {
+  try {
+    const response = await apiClient(config);
+    return {
+      success: true,
+      data: response.data,
+      status: response.status,
+    };
   } catch (error) {
-    console.error('API请求失败:', error)
-    throw error
+    return handleAPIError(error);
   }
-}
-
-
+};
 
 /**
- * 认证相关API
+ * GET请求
  */
+export const apiGet = async (url, params = {}) => {
+  return apiRequest({
+    method: 'GET',
+    url,
+    params,
+  });
+};
+
+/**
+ * POST请求
+ */
+export const apiPost = async (url, data = {}) => {
+  return apiRequest({
+    method: 'POST',
+    url,
+    data,
+  });
+};
+
+/**
+ * PUT请求
+ */
+export const apiPut = async (url, data = {}) => {
+  return apiRequest({
+    method: 'PUT',
+    url,
+    data,
+  });
+};
+
+/**
+ * DELETE请求
+ */
+export const apiDelete = async (url) => {
+  return apiRequest({
+    method: 'DELETE',
+    url,
+  });
+};
+
+/**
+ * 文件上传请求
+ */
+export const apiUpload = async (url, formData) => {
+  return apiRequest({
+    method: 'POST',
+    url,
+    data: formData,
+    headers: {
+      'Content-Type': 'multipart/form-data',
+    },
+  });
+};
+
+/**
+ * Server-Sent Events 连接
+ */
+export const createSSEConnection = (url, options = {}) => {
+  const token = getAuthToken();
+  const fullUrl = `${API_CONFIG.BASE_URL}${url}`;
+  
+  // 如果有token，添加到URL参数中（因为SSE无法设置headers）
+  const urlWithAuth = token 
+    ? `${fullUrl}${fullUrl.includes('?') ? '&' : '?'}token=${encodeURIComponent(token)}`
+    : fullUrl;
+  
+  return new EventSource(urlWithAuth, options);
+};
+
+// 导出认证相关工具函数
+export { getAuthToken, setAuthToken, clearAuth };
+
+// 导出axios实例（用于特殊情况下的直接使用）
+export { apiClient };
+
+// 认证相关API
 export const authAPI = {
-  /**
-   * 用户注册
-   * @param {string} username - 用户名
-   * @returns {Promise<Object>} 注册结果
-   */
-  register: async (username) => {
-    return apiRequest('/auth/register', {
-      method: 'POST',
-      body: JSON.stringify({ username }),
-    })
+  // 登录
+  login: async (credentials) => {
+    try {
+      const response = await apiPost('/auth/login', credentials);
+      return {
+        success: true,
+        data: response.data,
+      };
+    } catch (error) {
+      return {
+        success: false,
+        error: error.response?.data?.message || '登录失败',
+      };
+    }
   },
 
-  /**
-   * 用户登录
-   * @param {string} userId - 用户ID
-   * @returns {Promise<Object>} 登录结果
-   */
-  login: async (userId) => {
-    return apiRequest('/auth/login', {
-      method: 'POST',
-      body: JSON.stringify({ user_id: userId }),
-    })
+  // 注册
+  register: async (userData) => {
+    try {
+      const response = await apiPost('/auth/register', userData);
+      return {
+        success: true,
+        data: response.data,
+      };
+    } catch (error) {
+      return {
+        success: false,
+        error: error.response?.data?.message || '注册失败',
+      };
+    }
   },
 
-  /**
-   * 获取当前用户信息
-   * @returns {Promise<Object>} 用户信息
-   */
+  // 获取当前用户信息
   getCurrentUser: async () => {
-    return apiRequest('/auth/me')
+    try {
+      const response = await apiGet('/auth/me');
+      return {
+        success: true,
+        data: response.data,
+      };
+    } catch (error) {
+      return {
+        success: false,
+        error: error.response?.data?.message || '获取用户信息失败',
+      };
+    }
   },
 
-  /**
-   * 验证Token
-   * @returns {Promise<Object>} 验证结果
-   */
-  verifyToken: async () => {
-    return apiRequest('/auth/verify', { method: 'POST' })
+  // 登出
+  logout: async () => {
+    try {
+      await apiPost('/auth/logout');
+      return {
+        success: true,
+      };
+    } catch (error) {
+      return {
+        success: false,
+        error: error.response?.data?.message || '登出失败',
+      };
+    }
   },
-}
+};
 
-/**
- * 故事相关API
- */
+// 故事相关API
 export const storiesAPI = {
-  /**
-   * 获取用户所有故事
-   * @returns {Promise<Object>} 故事列表
-   */
-  getStories: async () => {
-    return apiRequest('/stories/')
+  // 获取故事列表
+  getStories: async (params = {}) => {
+    try {
+      const response = await apiGet('/stories', params);
+      return {
+        success: true,
+        data: response.data,
+      };
+    } catch (error) {
+      return {
+        success: false,
+        error: error.response?.data?.message || '获取故事列表失败',
+      };
+    }
   },
 
-  /**
-   * 创建新故事
-   * @param {Object} storyData - 故事数据
-   * @param {string} storyData.style - 故事风格
-   * @param {string} [storyData.title] - 故事标题
-   * @returns {Promise<Object>} 创建结果
-   */
+  // 获取我的故事
+  getMyStories: async (params = {}) => {
+    try {
+      const response = await apiGet('/stories/my', params);
+      return {
+        success: true,
+        data: response.data,
+      };
+    } catch (error) {
+      return {
+        success: false,
+        error: error.response?.data?.message || '获取我的故事失败',
+      };
+    }
+  },
+
+  // 获取单个故事详情
+  getStory: async (id) => {
+    try {
+      const response = await apiGet(`/stories/${id}`);
+      return {
+        success: true,
+        data: response.data,
+      };
+    } catch (error) {
+      return {
+        success: false,
+        error: error.response?.data?.message || '获取故事详情失败',
+      };
+    }
+  },
+
+  // 创建故事
   createStory: async (storyData) => {
-    return apiRequest('/stories/', {
-      method: 'POST',
-      body: JSON.stringify(storyData),
-    })
+    try {
+      const response = await apiPost('/stories', storyData);
+      return {
+        success: true,
+        data: response.data,
+      };
+    } catch (error) {
+      return {
+        success: false,
+        error: error.response?.data?.message || '创建故事失败',
+      };
+    }
   },
 
-  /**
-   * 获取故事详情
-   * @param {string} storyId - 故事ID
-   * @returns {Promise<Object>} 故事详情
-   */
-  getStory: async (storyId) => {
-    return apiRequest(`/stories/${storyId}`)
+  // 更新故事
+  updateStory: async (id, storyData) => {
+    try {
+      const response = await apiPut(`/stories/${id}`, storyData);
+      return {
+        success: true,
+        data: response.data,
+      };
+    } catch (error) {
+      return {
+        success: false,
+        error: error.response?.data?.message || '更新故事失败',
+      };
+    }
   },
 
-  /**
-   * 删除故事
-   * @param {string} storyId - 故事ID
-   * @returns {Promise<Object>} 删除结果
-   */
-  deleteStory: async (storyId) => {
-    return apiRequest(`/stories/${storyId}`, { method: 'DELETE' })
+  // 删除故事
+  deleteStory: async (id) => {
+    try {
+      await apiDelete(`/stories/${id}`);
+      return {
+        success: true,
+      };
+    } catch (error) {
+      return {
+        success: false,
+        error: error.response?.data?.message || '删除故事失败',
+      };
+    }
   },
+};
 
-  /**
-   * 获取故事章节列表
-   * @param {string} storyId - 故事ID
-   * @returns {Promise<Object>} 章节列表
-   */
-  getChapters: async (storyId) => {
-    return apiRequest(`/stories/${storyId}/chapters`)
-  },
-
-  /**
-   * 生成新章节
-   * @param {string} storyId - 故事ID
-   * @returns {Promise<Object>} 新章节
-   */
-  generateChapter: async (storyId) => {
-    return apiRequest(`/stories/${storyId}/chapters`, { method: 'POST' })
-  },
-}
-
-/**
- * 章节相关API
- */
+// 章节相关API
 export const chaptersAPI = {
-  /**
-   * 获取章节详情
-   * @param {string} chapterId - 章节ID
-   * @returns {Promise<Object>} 章节详情
-   */
-  getChapter: async (chapterId) => {
-    return apiRequest(`/chapters/${chapterId}`)
+  // 获取故事章节列表
+  getChapters: async (storyId, params = {}) => {
+    try {
+      const response = await apiGet(`/stories/${storyId}/chapters`, params);
+      return {
+        success: true,
+        data: response.data,
+      };
+    } catch (error) {
+      return {
+        success: false,
+        error: error.response?.data?.message || '获取章节列表失败',
+      };
+    }
   },
 
-  /**
-   * 获取章节选择选项
-   * @param {string} chapterId - 章节ID
-   * @returns {Promise<Object>} 选择选项
-   */
-  getChoices: async (chapterId) => {
-    return apiRequest(`/chapters/${chapterId}/choices`)
+  // 生成章节
+  generateChapter: async (storyId, chapterData) => {
+    try {
+      const response = await apiPost(`/stories/${storyId}/chapters/generate`, chapterData);
+      return {
+        success: true,
+        data: response.data,
+      };
+    } catch (error) {
+      return {
+        success: false,
+        error: error.response?.data?.message || '生成章节失败',
+      };
+    }
   },
 
-  /**
-   * 提交选择并生成下一章节
-   * @param {string} chapterId - 章节ID
-   * @param {Object} choiceData - 选择数据
-   * @returns {Promise<Object>} 下一章节
-   */
-  submitChoice: async (chapterId, choiceData) => {
-    return apiRequest(`/chapters/${chapterId}/choices`, {
-      method: 'POST',
-      body: JSON.stringify(choiceData),
-    })
+  // 获取生成进度
+  getGenerationProgress: async (taskId) => {
+    try {
+      const response = await apiGet(`/generation/progress/${taskId}`);
+      return {
+        success: true,
+        data: response.data,
+      };
+    } catch (error) {
+      return {
+        success: false,
+        error: error.response?.data?.message || '获取生成进度失败',
+      };
+    }
   },
-}
 
-// 为了向后兼容，导出一个模拟的 apiClient 对象
-export const apiClient = {
-  defaults: { baseURL: BASE_URL },
-  interceptors: {
-    request: { handlers: [{ fulfilled: (config) => config }] }
-  }
-}
+  // 取消生成
+  cancelGeneration: async (taskId) => {
+    try {
+      await apiPost(`/generation/cancel/${taskId}`);
+      return {
+        success: true,
+      };
+    } catch (error) {
+      return {
+        success: false,
+        error: error.response?.data?.message || '取消生成失败',
+      };
+    }
+  },
+};
+
+export default apiClient;
